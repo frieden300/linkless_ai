@@ -8,6 +8,8 @@ import '../../providers/chat_provider.dart';
 import '../../providers/app_settings_provider.dart';
 import '../../core/app_theme.dart';
 import '../utils/attachment_utils.dart';
+import '../screens/settings_screen.dart';
+import '../components/context_exceeded_modal.dart';
 
 class MessageBubble extends ConsumerStatefulWidget {
   final String? messageId;
@@ -235,6 +237,11 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
       displayContent = parts.last.trim();
     }
 
+    // If this is an exceed context error, don't show it as a model response in the chat
+    if (!isUser && _isExceedContextError(displayContent)) {
+      return const SizedBox.shrink();
+    }
+
     if (_isEditing && isUser) {
       return Padding(
         padding: const EdgeInsets.only(bottom: 24.0),
@@ -355,6 +362,8 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                             ),
                           if (content.isEmpty && !isUser && (reasoning == null || reasoning.isEmpty))
                             _buildTypingIndicator()
+                          else if (!isUser && _isExceedContextError(displayContent))
+                            _buildContextExceededBanner(context, displayContent)
                           else if (displayContent.isNotEmpty)
                             MessageRenderer(message: displayContent, isUser: isUser),
                         ],
@@ -680,6 +689,148 @@ class _MessageBubbleState extends ConsumerState<MessageBubble> {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  bool _isExceedContextError(String text) {
+    final lower = text.toLowerCase();
+    return lower.contains('exceed_context_size_error') ||
+        (lower.contains('exceeds the available context size') ||
+            (lower.contains('exceed') && lower.contains('context size')));
+  }
+
+  Widget _buildContextExceededBanner(BuildContext context, String rawError) {
+    // Attempt to extract n_prompt_tokens and n_ctx from message
+    int? promptTokens;
+    int? currentCtx;
+
+    final match = RegExp(r'request \((\d+) tokens\) exceeds the available context size \((\d+) tokens\)', caseSensitive: false)
+        .firstMatch(rawError);
+    if (match != null) {
+      promptTokens = int.tryParse(match.group(1) ?? '');
+      currentCtx = int.tryParse(match.group(2) ?? '');
+    } else {
+      final pMatch = RegExp(r'"n_prompt_tokens"\s*:\s*(\d+)').firstMatch(rawError);
+      final cMatch = RegExp(r'"n_ctx"\s*:\s*(\d+)').firstMatch(rawError);
+      if (pMatch != null) promptTokens = int.tryParse(pMatch.group(1) ?? '');
+      if (cMatch != null) currentCtx = int.tryParse(cMatch.group(1) ?? '');
+    }
+
+    final currentSetting = ref.read(appSettingsProvider).contextLength;
+    final activeCtx = currentCtx ?? currentSetting;
+
+    // Recommend next standard power-of-2 context bucket that comfortably fits prompt + generation headroom
+    int recommendedCtx;
+    final needed = (promptTokens != null) ? (promptTokens + 2048) : (activeCtx * 2);
+    if (needed <= 8192) {
+      recommendedCtx = 8192;
+    } else if (needed <= 12288) {
+      recommendedCtx = 12288;
+    } else if (needed <= 16384) {
+      recommendedCtx = 16384;
+    } else if (needed <= 24576) {
+      recommendedCtx = 24576;
+    } else if (needed <= 32768) {
+      recommendedCtx = 32768;
+    } else {
+      recommendedCtx = 40960;
+    }
+
+    if (recommendedCtx <= activeCtx) {
+      recommendedCtx = (activeCtx * 2).clamp(512, 40960);
+    }
+
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 520),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2D1818),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE53935).withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF6B6B), size: 20),
+              const SizedBox(width: 8),
+              const Text(
+                'Prompt Exceeds Context Length',
+                style: TextStyle(
+                  color: Color(0xFFFF6B6B),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            promptTokens != null
+                ? 'Your prompt with attachments required ~$promptTokens tokens, which exceeds the current limit ($activeCtx tokens).'
+                : 'Your prompt and attachments exceeded the current context limit ($activeCtx tokens).',
+            style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              const Icon(Icons.lightbulb_outline, color: Color(0xFFFFCA28), size: 16),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Recommended setting: $recommendedCtx tokens (Settings → AI Behavior).\nImportant: Restart model after changing context length.',
+                  style: const TextStyle(
+                    color: Color(0xFFFFCA28),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white70,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                ),
+                icon: const Icon(Icons.info_outline_rounded, size: 16),
+                label: const Text('View Details', style: TextStyle(fontSize: 12)),
+                onPressed: () {
+                  showContextExceededModal(
+                    context: context,
+                    promptTokens: promptTokens,
+                    activeCtx: activeCtx,
+                    recommendedCtx: recommendedCtx,
+                  );
+                },
+              ),
+              const SizedBox(width: 8),
+              TextButton.icon(
+                style: TextButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: const Icon(Icons.tune_rounded, size: 16),
+                label: const Text('Open Settings', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (_) => const SettingsDialog(initialTabIndex: 1),
+                  );
+                },
+              ),
+            ],
           ),
         ],
       ),

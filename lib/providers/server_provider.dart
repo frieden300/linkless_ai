@@ -141,6 +141,21 @@ class ServerNotifier extends StateNotifier<ServerState> {
     await startServerWithModel(modelPath);
   }
 
+  /// Restarts the active server (either vision or text model) with updated settings
+  Future<void> restartServer() async {
+    final activePath = state.activeModelPath;
+    final isVision = state.currentMode == ModelMode.vision;
+    await stopServer(skipOfflineReset: true);
+    await Future.delayed(const Duration(milliseconds: 600));
+    if (isVision) {
+      await startVisionServer();
+    } else if (activePath != null && activePath.isNotEmpty && File(activePath).existsSync()) {
+      await startServerWithModel(activePath);
+    } else {
+      await startServer();
+    }
+  }
+
   /// Stop server with graceful termination + force kill fallback
   Future<void> stopServer({bool skipOfflineReset = false}) async {
     debugPrint('Stopping model/server...');
@@ -197,11 +212,16 @@ class ServerNotifier extends StateNotifier<ServerState> {
     // 1. Direct kill of tracked handle
     _process?.kill(ProcessSignal.sigkill);
     
+    // Resolve taskkill path dynamically from SystemRoot or fallback to taskkill
+    final systemRoot = Platform.environment['SystemRoot'] ?? r'C:\Windows';
+    final taskkillPath = p.join(systemRoot, 'System32', 'taskkill.exe');
+    final taskkillCmd = File(taskkillPath).existsSync() ? taskkillPath : 'taskkill';
+
     // 2. Process-tree kill via PID (most specific)
     if (_processPid != null) {
       try {
         if (Platform.isWindows) {
-          Process.runSync(r'C:\Windows\System32\taskkill.exe', ['/F', '/T', '/PID', _processPid.toString()], runInShell: false);
+          Process.runSync(taskkillCmd, ['/F', '/T', '/PID', _processPid.toString()], runInShell: taskkillCmd == 'taskkill');
         } else {
           _process?.kill(ProcessSignal.sigkill);
         }
@@ -211,7 +231,7 @@ class ServerNotifier extends StateNotifier<ServerState> {
     // 3. Global backup kill by name (catches orphans)
     try {
       if (Platform.isWindows) {
-        Process.runSync(r'C:\Windows\System32\taskkill.exe', ['/F', '/T', '/IM', 'llama-server.exe'], runInShell: false);
+        Process.runSync(taskkillCmd, ['/F', '/T', '/IM', 'llama-server.exe'], runInShell: taskkillCmd == 'taskkill');
       }
     } catch (_) {}
 
@@ -242,6 +262,16 @@ class ServerNotifier extends StateNotifier<ServerState> {
       final contextLength = appSettings.contextLength.toString();
       final serverExe = appSettings.llamaServerPath;
       final serverDir = p.dirname(serverExe);
+
+      if (!File(serverExe).existsSync()) {
+        final err = 'llama-server executable not found at: $serverExe';
+        debugPrint('[Server] Error: $err');
+        state = ServerState(
+          status: ServerStatus.error,
+          errorMessage: err,
+        );
+        return;
+      }
 
       _process = await Process.start(
         serverExe,
@@ -275,6 +305,7 @@ class ServerNotifier extends StateNotifier<ServerState> {
         errorMessage: 'Server timed out (90s).',
       );
     } catch (e) {
+      debugPrint('[Server] Failed to start server: $e');
       state = ServerState(
         status: ServerStatus.error,
         errorMessage: 'Failed to start server: $e',
@@ -344,7 +375,17 @@ class ServerNotifier extends StateNotifier<ServerState> {
       final serverExe = appSettings.llamaServerPath;
       final serverDir = p.dirname(serverExe);
 
-      debugPrint('[Vision) Starting vision server: $serverExe');
+      if (!File(serverExe).existsSync()) {
+        final err = 'llama-server executable not found at: $serverExe';
+        debugPrint('[Vision] Error: $err');
+        state = state.copyWith(
+          status: ServerStatus.error,
+          errorMessage: err,
+        );
+        return;
+      }
+
+      debugPrint('[Vision] Starting vision server: $serverExe');
       debugPrint('[Vision]   model   : $visionPath');
       debugPrint('[Vision]   mmproj  : $mmProjPath');
       debugPrint('[Vision]   context : $ctx');

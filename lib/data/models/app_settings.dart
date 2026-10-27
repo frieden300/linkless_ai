@@ -29,11 +29,26 @@ class AppSettings {
 
   static String get defaultLlamaServerPath {
     final exeDir = p.dirname(Platform.resolvedExecutable);
-    final checkPath = p.join(exeDir, 'llama-cpp', 'llama-server.exe');
-    if (File(checkPath).existsSync()) {
-      return checkPath;
+
+    // 1. Packaged release mode: next to linkless_ai.exe
+    final releasePath = p.join(exeDir, 'llama-cpp', 'llama-server.exe');
+    if (File(releasePath).existsSync()) {
+      return releasePath;
     }
-    return r'C:\Users\viraj\Projects\linkless_ai\llama-cpp\llama-server.exe';
+
+    // 2. Development mode: current working directory (e.g. flutter run in repo root)
+    final cwdPath = p.join(Directory.current.path, 'llama-cpp', 'llama-server.exe');
+    if (File(cwdPath).existsSync()) {
+      return cwdPath;
+    }
+
+    // 3. Development mode: project root when running from build/windows/x64/runner/(Debug|Release)
+    final devPath = p.normalize(p.join(exeDir, '..', '..', '..', '..', '..', 'llama-cpp', 'llama-server.exe'));
+    if (File(devPath).existsSync()) {
+      return devPath;
+    }
+
+    return releasePath;
   }
 
   AppSettings({
@@ -59,7 +74,9 @@ class AppSettings {
     this.baseModelsExpanded = true,
     this.visualModelsExpanded = true,
     this.mmProjModelsExpanded = true,
-  }) : llamaServerPath = llamaServerPath ?? defaultLlamaServerPath;
+  }) : llamaServerPath = (llamaServerPath != null && llamaServerPath.isNotEmpty && File(llamaServerPath).existsSync())
+            ? llamaServerPath
+            : defaultLlamaServerPath;
 
   Map<String, dynamic> toMap() {
     return {

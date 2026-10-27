@@ -72,3 +72,10 @@ help.txt
 
 # Windows run-server shortcut (user-specific)
 run server cmd
+
+# Release-only setup script (bundled in GitHub Releases, not repo)
+setup_release.bat
+
+# Screen recording raw captures and video sources (large media)
+*.stg
+docs/*.mp4

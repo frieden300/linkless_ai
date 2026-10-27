@@ -73,6 +73,10 @@ class FileExtractionService {
         return "Error: No text could be extracted from this file.";
       }
 
+      // Sanitize: remove unpaired surrogates and control chars that break
+      // JSON serialisation in llama-server (e.g. lone \uD835 from math PDFs).
+      extractedText = _sanitizeText(extractedText);
+
       // Truncate to save context window space
       if (extractedText.length > maxChars) {
         extractedText = "${extractedText.substring(0, maxChars)}\n...[Text truncated due to length limits]";
@@ -82,6 +86,45 @@ class FileExtractionService {
     } catch (e) {
       return "Error extracting file: ${e.toString()}";
     }
+  }
+
+  /// Removes characters that are illegal in JSON strings:
+  ///   - Unpaired surrogate code points U+D800..U+DFFF
+  ///   - C0 control characters (U+0000..U+001F) except \t, \n, \r
+  static String _sanitizeText(String text) {
+    final buffer = StringBuffer();
+    for (int i = 0; i < text.length; i++) {
+      final int code = text.codeUnitAt(i);
+
+      // High surrogate
+      if (code >= 0xD800 && code <= 0xDBFF) {
+        if (i + 1 < text.length) {
+          final int next = text.codeUnitAt(i + 1);
+          if (next >= 0xDC00 && next <= 0xDFFF) {
+            // Valid surrogate pair — write both and skip ahead
+            buffer.writeCharCode(code);
+            buffer.writeCharCode(next);
+            i++;
+            continue;
+          }
+        }
+        // Lone high surrogate — drop it
+        continue;
+      }
+
+      // Lone low surrogate — drop it
+      if (code >= 0xDC00 && code <= 0xDFFF) {
+        continue;
+      }
+
+      // Strip C0 control chars except tab (9), LF (10), CR (13)
+      if (code < 0x20 && code != 9 && code != 10 && code != 13) {
+        continue;
+      }
+
+      buffer.writeCharCode(code);
+    }
+    return buffer.toString();
   }
 
   static Future<String?> _extractPdf(File file) async {

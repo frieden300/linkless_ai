@@ -715,20 +715,74 @@ class ChatNotifier extends StateNotifier<ChatState> {
           }
           _currentSubscription = null;
         },
-        onError: (e) {
-          state = state.copyWith(
-            isGenerating: false,
-            streamingContent: 'Error: $e',
+        onError: (e) async {
+          final errorMessage = Message(
+            id: const Uuid().v4(),
+            conversationId: conversationId,
+            role: 'assistant',
+            content: 'Error: $e',
+            timestamp: DateTime.now(),
+            model: _ref
+                .read(serverProvider)
+                .activeModelPath
+                ?.split(RegExp(r'[/\\]'))
+                .last ?? 'Unknown',
           );
+
+          if (!state.isTemporaryChat) {
+            await _chatRepository.saveMessage(errorMessage);
+            loadConversations();
+            final msgs = await _chatRepository.getMessages(conversationId);
+            state = state.copyWith(
+              activeMessages: msgs,
+              isGenerating: false,
+              streamingContent: '',
+              streamingReasoning: '',
+            );
+          } else {
+            state = state.copyWith(
+              activeMessages: [...state.activeMessages, errorMessage],
+              isGenerating: false,
+              streamingContent: '',
+              streamingReasoning: '',
+            );
+          }
           _currentSubscription = null;
         },
         cancelOnError: true,
       );
     } catch (e) {
-      state = state.copyWith(
-        isGenerating: false,
-        streamingContent: 'Error: $e',
+      final errorMessage = Message(
+        id: const Uuid().v4(),
+        conversationId: conversationId,
+        role: 'assistant',
+        content: 'Error: $e',
+        timestamp: DateTime.now(),
+        model: _ref
+            .read(serverProvider)
+            .activeModelPath
+            ?.split(RegExp(r'[/\\]'))
+            .last ?? 'Unknown',
       );
+
+      if (!state.isTemporaryChat) {
+        await _chatRepository.saveMessage(errorMessage);
+        loadConversations();
+        final msgs = await _chatRepository.getMessages(conversationId);
+        state = state.copyWith(
+          activeMessages: msgs,
+          isGenerating: false,
+          streamingContent: '',
+          streamingReasoning: '',
+        );
+      } else {
+        state = state.copyWith(
+          activeMessages: [...state.activeMessages, errorMessage],
+          isGenerating: false,
+          streamingContent: '',
+          streamingReasoning: '',
+        );
+      }
     }
   }
 

@@ -17,6 +17,7 @@ import '../../core/services/media_service.dart';
 import '../../core/services/file_extraction_service.dart';
 import 'voice_waveform.dart';
 import '../components/api_key_modal.dart';
+import '../components/context_exceeded_modal.dart';
 
 class ChatArea extends ConsumerStatefulWidget {
   const ChatArea({super.key});
@@ -195,6 +196,68 @@ class _ChatAreaState extends ConsumerState<ChatArea> {
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatProvider);
     final serverState = ref.watch(serverProvider);
+
+    // Listen for context exceeded error and show floating modal dialog
+    ref.listen<ChatState>(chatProvider, (previous, next) {
+      if (next.activeMessages.isNotEmpty &&
+          (previous == null || next.activeMessages.length != previous.activeMessages.length)) {
+        final lastMsg = next.activeMessages.last;
+        if (lastMsg.role == 'assistant') {
+          final content = lastMsg.content.toLowerCase();
+          if (content.contains('exceed_context_size_error') ||
+              (content.contains('exceeds the available context size') ||
+                  (content.contains('exceed') && content.contains('context size')))) {
+            int? promptTokens;
+            int? currentCtx;
+            final match = RegExp(
+              r'request \((\d+) tokens\) exceeds the available context size \((\d+) tokens\)',
+              caseSensitive: false,
+            ).firstMatch(lastMsg.content);
+            if (match != null) {
+              promptTokens = int.tryParse(match.group(1) ?? '');
+              currentCtx = int.tryParse(match.group(2) ?? '');
+            } else {
+              final pMatch = RegExp(r'"n_prompt_tokens"\s*:\s*(\d+)').firstMatch(lastMsg.content);
+              final cMatch = RegExp(r'"n_ctx"\s*:\s*(\d+)').firstMatch(lastMsg.content);
+              if (pMatch != null) promptTokens = int.tryParse(pMatch.group(1) ?? '');
+              if (cMatch != null) currentCtx = int.tryParse(cMatch.group(1) ?? '');
+            }
+
+            final activeCtx = currentCtx ?? ref.read(appSettingsProvider).contextLength;
+            int recommendedCtx;
+            final needed = (promptTokens != null) ? (promptTokens + 2048) : (activeCtx * 2);
+            if (needed <= 8192) {
+              recommendedCtx = 8192;
+            } else if (needed <= 12288) {
+              recommendedCtx = 12288;
+            } else if (needed <= 16384) {
+              recommendedCtx = 16384;
+            } else if (needed <= 24576) {
+              recommendedCtx = 24576;
+            } else if (needed <= 32768) {
+              recommendedCtx = 32768;
+            } else {
+              recommendedCtx = 40960;
+            }
+
+            if (recommendedCtx <= activeCtx) {
+              recommendedCtx = (activeCtx * 2).clamp(512, 40960);
+            }
+
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                showContextExceededModal(
+                  context: context,
+                  promptTokens: promptTokens,
+                  activeCtx: activeCtx,
+                  recommendedCtx: recommendedCtx,
+                );
+              }
+            });
+          }
+        }
+      }
+    });
 
     // Show dashboard only if no messages AND not generating
     final showDashboard =

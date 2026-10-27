@@ -52,7 +52,19 @@ class ModelNotifier extends StateNotifier<ModelState> {
   Future<void> _scanLocalModelsOnStartup() async {
     try {
       final exeDir = p.dirname(Platform.resolvedExecutable);
-      final modelDir = Directory(p.join(exeDir, 'model'));
+      Directory modelDir = Directory(p.join(exeDir, 'models'));
+
+      if (!await modelDir.exists()) {
+        final cwdModels = Directory(p.join(Directory.current.path, 'models'));
+        if (await cwdModels.exists()) {
+          modelDir = cwdModels;
+        } else {
+          final devModels = Directory(p.normalize(p.join(exeDir, '..', '..', '..', '..', '..', 'models')));
+          if (await devModels.exists()) {
+            modelDir = devModels;
+          }
+        }
+      }
       
       if (!await modelDir.exists()) return;
       

@@ -12,7 +12,8 @@ import '../../providers/chat_provider.dart';
 
 /// Compact modern settings dialog - opens as overlay window
 class SettingsDialog extends ConsumerStatefulWidget {
-  const SettingsDialog({super.key});
+  final int initialTabIndex;
+  const SettingsDialog({super.key, this.initialTabIndex = 0});
 
   @override
   ConsumerState<SettingsDialog> createState() => _SettingsDialogState();
@@ -21,12 +22,88 @@ class SettingsDialog extends ConsumerStatefulWidget {
 class _SettingsDialogState extends ConsumerState<SettingsDialog>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  late int _initialContextLength;
 
   @override
   void initState() {
     super.initState();
+    _initialContextLength = ref.read(appSettingsProvider).contextLength;
     // 4 Tabs: Models, AI Behavior, Appearance, Privacy
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(
+      length: 4,
+      vsync: this,
+      initialIndex: widget.initialTabIndex.clamp(0, 3),
+    );
+  }
+
+  void _handleClose() {
+    final currentContext = ref.read(appSettingsProvider).contextLength;
+    final serverState = ref.read(serverProvider);
+    final isRunning = serverState.status == ServerStatus.online ||
+        serverState.status == ServerStatus.starting ||
+        serverState.status == ServerStatus.loading;
+
+    Navigator.pop(context);
+
+    if (isRunning && currentContext != _initialContextLength) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _promptRestartServer(context, currentContext);
+      });
+    }
+  }
+
+  void _promptRestartServer(BuildContext context, int newContext) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppTheme.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.restart_alt_rounded, color: Color(0xFF4ECDC4), size: 22),
+            SizedBox(width: 10),
+            Text(
+              'Restart Model?',
+              style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        content: Text(
+          'You updated Model Context Length to $newContext tokens.\nThe running model must be restarted for this change to take effect.',
+          style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.textSecondary),
+            child: const Text('Later'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.pop(ctx);
+              ref.read(serverProvider.notifier).restartServer();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Restarting model with updated context length...'),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: AppTheme.primary,
+                ),
+              );
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            icon: const Icon(Icons.restart_alt_rounded, size: 16),
+            label: const Text('Restart Now', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -37,44 +114,52 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog>
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      child: Container(
-        width: 800, // Slightly wider for model cards
-        height: 600,
-        decoration: BoxDecoration(
-          color: AppTheme.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.5),
-              blurRadius: 30,
-              spreadRadius: 5,
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            // Header
-            _buildHeader(),
-
-            // Tab Bar
-            _buildTabBar(),
-
-            // Content
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: const [
-                  _ModelManagementTab(),
-                  _AISettingsTab(),
-                  _AppearanceTab(),
-                  _PrivacyTab(),
-                ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          _handleClose();
+        }
+      },
+      child: Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          width: 800, // Slightly wider for model cards
+          height: 600,
+          decoration: BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.5),
+                blurRadius: 30,
+                spreadRadius: 5,
               ),
-            ),
-          ],
+            ],
+          ),
+          child: Column(
+            children: [
+              // Header
+              _buildHeader(),
+
+              // Tab Bar
+              _buildTabBar(),
+
+              // Content
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: const [
+                    _ModelManagementTab(),
+                    _AISettingsTab(),
+                    _AppearanceTab(),
+                    _PrivacyTab(),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -103,7 +188,7 @@ class _SettingsDialogState extends ConsumerState<SettingsDialog>
           const Spacer(),
           IconButton(
             icon: const Icon(Icons.close, color: AppTheme.textSecondary),
-            onPressed: () => Navigator.pop(context),
+            onPressed: _handleClose,
           ),
         ],
       ),
