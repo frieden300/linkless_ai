@@ -19,9 +19,9 @@ Built with Flutter, Dart, Riverpod, GGUF models, and
 ![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=for-the-badge&logo=windows&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
-[Features](#-features) · [Try Linkless AI](#-try-linkless-ai) ·
-[Developer setup](#-developer-setup) · [Architecture](#-architecture) ·
-[Troubleshooting](#-troubleshooting)
+[Features](#-features) · [Try Linkless AI](#-try-linkless-ai-windows-release) ·
+[Developer setup](#%E2%80%8D-developer-setup) · [Architecture](#%EF%B8%8F-architecture) ·
+[Troubleshooting](#%EF%B8%8F-troubleshooting)
 
 </div>
 
@@ -281,7 +281,7 @@ Git and are kept separately from the normal Flutter build output.
 
 ------------------------------------------------------------------------
 
-## 🏗️ Architecture
+## ⚙️ Architecture
 Linkless AI separates the desktop application runtime from the local inference engine, managing hardware-accelerated local LLM processes with zero cloud dependencies.
 
 <p align="center">
