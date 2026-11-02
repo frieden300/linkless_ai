@@ -29,9 +29,7 @@ Built with Flutter, Dart, Riverpod, GGUF models, and
 
 ## 📽️ Demo
 
-<p align="center">
-  <img src="docs/demo.gif" alt="Linkless AI Live Demo" width="100%">
-</p>
+https://github.com/user-attachments/assets/5fcec928-cbf9-47b5-bb2b-96889a505f41
 
 ## 🖼️ Screenshots
 
