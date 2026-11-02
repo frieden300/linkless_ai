@@ -12,12 +12,12 @@ inference.
 Built with Flutter, Dart, Riverpod, GGUF models, and
 [llama.cpp](https://github.com/ggml-org/llama.cpp).
 
-![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?style=for-the-badge&logo=flutter&logoColor=white)
-![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?style=for-the-badge&logo=dart&logoColor=white)
+![Flutter](https://img.shields.io/badge/Flutter-3.41.4-02569B?style=for-the-badge&logo=flutter&logoColor=white)
+![Dart](https://img.shields.io/badge/Dart-3.11.1-0175C2?style=for-the-badge&logo=dart&logoColor=white)
 ![llama.cpp](https://img.shields.io/badge/llama.cpp-GGUF-8B5CF6?style=for-the-badge)
 ![Riverpod](https://img.shields.io/badge/Riverpod-State_Mgmt-00BCD4?style=for-the-badge)
 ![Windows](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=for-the-badge&logo=windows&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue?style=for-the-badge)](LICENSE)
 
 [Features](#-features) · [Try Linkless AI](#-try-linkless-ai-windows-release) ·
 [Developer setup](#%E2%80%8D-developer-setup) · [Architecture](#%EF%B8%8F-architecture) ·
@@ -138,8 +138,8 @@ the source code, or compile their own Windows build.
 | Tool                                                | Required?                      | Notes                                                                      |
 |-----------------------------------------------------|--------------------------------|----------------------------------------------------------------------------|
 | Git                                                 | Yes                            | To clone the repository and manage changes                                 |
-| Flutter SDK                                         | Yes                            | Must be available on `PATH`                                                |
-| Dart SDK                                            | Included with Flutter          | Use the version compatible with the repository's `pubspec.yaml`            |
+| Flutter SDK                                         | Yes                            | Version 3.41.4+ (must be available on `PATH`)                              |
+| Dart SDK                                            | Included with Flutter          | Version 3.11.1+ (compatible with `pubspec.yaml` sdk: ^3.10.7)              |
 | Visual Studio with **Desktop development with C++** | Yes for Windows desktop builds | Visual Studio Code alone does not provide the required C++ build toolchain |
 | Windows 10/11 x64                                   | Yes                            | Target development platform                                                |
 | Internet connection                                 | For setup                      | Needed for Flutter packages and optional runtime downloads                 |
@@ -385,9 +385,9 @@ build output, or private datasets to the repository.
 
 ## 📄 License
 
-See the repository's `LICENSE` file for the terms that apply to this
-project and its code. Model weights and third-party dependencies may
-have separate licenses and terms; review those before redistribution.
+This project is licensed under the **Apache License 2.0** — see the [LICENSE](LICENSE) file for the full license text.
+
+Model weights and third-party dependencies may have separate licenses and terms; review those before redistribution.
 
 ------------------------------------------------------------------------
 
